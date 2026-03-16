@@ -1,0 +1,197 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "A user of the platform (Admin, Event Creator, or Volunteer).",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "The unique ID of the user (matches Firebase Auth UID)." },
+        "name": { "type": "string", "description": "The full name of the user." },
+        "email": { "type": "string", "description": "The email address of the user." },
+        "role": { "type": "string", "enum": ["Admin", "Event Creator", "Volunteer"], "description": "The role of the user." },
+        "accountStatus": { "type": "string", "enum": ["Pending", "Active", "Rejected"], "description": "The status of the user's account." },
+        "postcode": { "type": "string", "description": "The user's postcode." },
+        "points": { "type": "number", "description": "The total points earned by the volunteer." },
+        "badges": { 
+          "type": "array", 
+          "items": { 
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "name": { "type": "string" },
+              "icon": { "type": "string" },
+              "description": { "type": "string" }
+            }
+          }
+        },
+        "volunteerStatus": { "type": "string", "enum": ["Unverified", "Verified"] },
+        "completedEvents": { "type": "number" },
+        "ratings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "criteria": { "type": "string" },
+              "score": { "type": "number" }
+            }
+          }
+        },
+        "pointsHistory": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "eventId": { "type": "string" },
+              "eventName": { "type": "string" },
+              "points": { "type": "number" },
+              "date": { "type": "string" },
+              "reason": { "type": "string" }
+            }
+          }
+        },
+        "skills": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string" },
+              "endorsements": { "type": "number" }
+            }
+          }
+        },
+        "createdEvents": { "type": "array", "items": { "type": "string" } },
+        "phoneNumber": { "type": "string", "description": "The user's phone number." },
+        "requestedEventCreator": { "type": "boolean", "description": "Whether the user has requested to become an event creator." }
+      },
+      "required": ["id", "name", "email", "role", "accountStatus"]
+    },
+    "HelpRequest": {
+      "title": "HelpRequest",
+      "description": "A request for help from a community member.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "fullName": { "type": "string" },
+        "address": { "type": "string" },
+        "postcode": { "type": "string" },
+        "phoneNumber": { "type": "string" },
+        "helpNeeded": { "type": "string" },
+        "dateTime": { "type": "string" },
+        "status": { "type": "string", "enum": ["Pending", "Accepted", "Completed"] },
+        "createdAt": { "type": "number" },
+        "coordinates": { 
+          "type": "object", 
+          "properties": { 
+            "lat": { "type": "number" }, 
+            "lng": { "type": "number" } 
+          } 
+        },
+        "declinedBy": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["id", "fullName", "address", "postcode", "phoneNumber", "helpNeeded", "status", "createdAt"]
+    },
+    "BannedRequester": {
+      "title": "BannedRequester",
+      "description": "A banned requester.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "phoneNumber": { "type": "string" },
+        "postcode": { "type": "string" },
+        "address": { "type": "string" }
+      },
+      "required": ["id", "phoneNumber", "postcode", "address"]
+    },
+    "Event": {
+      "title": "Event",
+      "description": "A community service event.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "location": { "type": "string" },
+        "exactLocation": { "type": "string" },
+        "postcode": { "type": "string" },
+        "date": { "type": "string" },
+        "time": { "type": "string" },
+        "deadline": { "type": "string" },
+        "volunteersNeeded": { "type": "number" },
+        "volunteers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "userId": { "type": "string" },
+              "userName": { "type": "string" },
+              "status": { "type": "string", "enum": ["Pending", "Confirmed", "Attended"] }
+            }
+          }
+        },
+        "creatorId": { "type": "string" },
+        "creatorName": { "type": "string" },
+        "status": { "type": "string", "enum": ["Upcoming", "Completed"] },
+        "category": { "type": "string" },
+        "announcements": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "message": { "type": "string" },
+              "timestamp": { "type": "string" }
+            }
+          }
+        }
+      },
+      "required": ["id", "title", "creatorId", "status"]
+    },
+    "EventTemplate": {
+      "title": "EventTemplate",
+      "description": "A template for creating events.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "creatorId": { "type": "string" },
+        "templateData": { "type": "object" }
+      },
+      "required": ["id", "name", "creatorId", "templateData"]
+    },
+    "Report": {
+      "title": "Report",
+      "description": "A report against a user or event.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "reportedId": { "type": "string" },
+        "reportedName": { "type": "string" },
+        "reportedType": { "type": "string", "enum": ["User", "Event"] },
+        "reporterId": { "type": "string" },
+        "reporterName": { "type": "string" },
+        "reason": { "type": "string" },
+        "status": { "type": "string", "enum": ["Pending", "Reviewed"] },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["id", "reportedId", "reporterId", "status"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles."
+    },
+    "/events/{eventId}": {
+      "schema": "Event",
+      "description": "Community events."
+    },
+    "/eventTemplates/{templateId}": {
+      "schema": "EventTemplate",
+      "description": "Reusable event templates."
+    },
+    "/reports/{reportId}": {
+      "schema": "Report",
+      "description": "User and event reports."
+    }
+  }
+}

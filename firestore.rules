@@ -1,0 +1,208 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: userId (Auth UID)
+    // Fields:
+    //   - id: string (required)
+    //   - name: string (required)
+    //   - email: string (required)
+    //   - role: string (Admin, Event Creator, Volunteer)
+    //   - accountStatus: string (Pending, Active, Rejected)
+    //   - postcode: string
+    //   - points: number
+    //   - badges: list
+    //   - volunteerStatus: string
+    //   - completedEvents: number
+    //   - ratings: list
+    //   - pointsHistory: list
+    //   - skills: list
+    //   - createdEvents: list
+    //
+    // Collection: events
+    // Document ID: eventId
+    // Fields:
+    //   - id: string (required)
+    //   - title: string (required)
+    //   - description: string
+    //   - location: string
+    //   - postcode: string
+    //   - date: string
+    //   - time: string
+    //   - deadline: string
+    //   - volunteersNeeded: number
+    //   - volunteers: list (userId, userName, status)
+    //   - creatorId: string (required)
+    //   - creatorName: string
+    //   - status: string (Upcoming, Completed)
+    //   - category: string
+    //   - announcements: list
+    //
+    // Collection: eventTemplates
+    // Document ID: templateId
+    // Fields:
+    //   - id: string (required)
+    //   - name: string (required)
+    //   - creatorId: string (required)
+    //   - templateData: map
+    //
+    // Collection: reports
+    // Document ID: reportId
+    // Fields:
+    //   - id: string (required)
+    //   - reportedId: string (required)
+    //   - reportedName: string
+    //   - reportedType: string (User, Event)
+    //   - reporterId: string (required)
+    //   - reporterName: string
+    //   - reason: string
+    //   - status: string (Pending, Reviewed)
+    //   - timestamp: string
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Admin' ||
+         request.auth.token.email == "moskiyacob@gmail.com");
+    }
+
+    function isEventCreator() {
+      return isAuthenticated() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Event Creator';
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidUser(data) {
+      return hasOnlyAllowedFields(['id', 'name', 'email', 'role', 'accountStatus', 'postcode', 'points', 'badges', 'volunteerStatus', 'completedEvents', 'ratings', 'pointsHistory', 'skills', 'createdEvents', 'phoneNumber', 'requestedEventCreator', 'statusMessage', 'readAnnouncements']) &&
+             data.id is string && data.id.size() > 0 &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             isValidEmail(data.email) &&
+             data.role in ['Admin', 'Event Creator', 'Volunteer'] &&
+             data.accountStatus in ['Pending', 'Active', 'Rejected'] &&
+             (!('phoneNumber' in data) || (data.phoneNumber is string && data.phoneNumber.size() < 30)) &&
+             (!('requestedEventCreator' in data) || data.requestedEventCreator is bool) &&
+             (!('badges' in data) || data.badges is list) &&
+             (!('points' in data) || data.points is number) &&
+             (!('volunteerStatus' in data) || data.volunteerStatus in ['Unverified', 'Verified']) &&
+             (!('statusMessage' in data) || (data.statusMessage is string && data.statusMessage.size() < 1000)) &&
+             (!('readAnnouncements' in data) || data.readAnnouncements is list);
+    }
+
+    function isValidEvent(data) {
+      return data.id is string && data.id.size() > 0 &&
+             data.title is string && data.title.size() > 0 && data.title.size() < 200 &&
+             data.creatorId is string &&
+             data.status in ['Upcoming', 'Completed'];
+    }
+
+    function isValidReport(data) {
+      return data.id is string &&
+             data.reportedId is string &&
+             data.reporterId is string &&
+             data.status in ['Pending', 'Reviewed'];
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      // Users can read their own profile. Admins can read all.
+      // Volunteers can read other volunteers' profiles for endorsements (limited info in real app, but here we allow read for simplicity of the demo)
+      // Actually, let's restrict read to owner or admin for PII protection.
+      allow read: if isOwner(userId) || isAdmin();
+      
+      // Public profiles for volunteers (limited fields) - in a real app we'd split this.
+      // For this app, let's allow authenticated users to read basic info for endorsements.
+      allow list: if isAuthenticated();
+      allow get: if isAuthenticated();
+
+      allow create: if isAuthenticated() && isOwner(userId) && isValidUser(request.resource.data) && 
+                    (request.resource.data.role == 'Volunteer' || isAdmin());
+      
+      allow update: if isAuthenticated() && (
+        isAdmin() ||
+        (isOwner(userId) && isValidUser(request.resource.data) && 
+         request.resource.data.role == resource.data.role && 
+         request.resource.data.accountStatus == resource.data.accountStatus) ||
+        (isEventCreator() && isValidUser(request.resource.data) &&
+         request.resource.data.role == resource.data.role && 
+         request.resource.data.accountStatus == resource.data.accountStatus &&
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ratings', 'volunteerStatus', 'points', 'pointsHistory', 'completedEvents', 'badges', 'skills', 'createdEvents']))
+      );
+    }
+
+    match /events/{eventId} {
+      allow read: if isAuthenticated();
+      
+      allow create: if (isAdmin() || isEventCreator()) && isValidEvent(request.resource.data) && request.resource.data.creatorId == request.auth.uid;
+      
+      allow update: if isAuthenticated() && (
+        isAdmin() || 
+        (resource.data.creatorId == request.auth.uid && isValidEvent(request.resource.data)) ||
+        // Volunteers can update the volunteers list to apply
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['volunteers']) && 
+         request.resource.data.volunteers.size() <= resource.data.volunteers.size() + 1)
+      );
+      
+      allow delete: if isAdmin() || (isEventCreator() && resource.data.creatorId == request.auth.uid);
+    }
+
+    match /eventTemplates/{templateId} {
+      allow read: if isAuthenticated();
+      allow create: if (isAdmin() || isEventCreator()) && request.resource.data.creatorId == request.auth.uid;
+      allow update: if (isAdmin() || (isEventCreator() && resource.data.creatorId == request.auth.uid));
+      allow delete: if (isAdmin() || (isEventCreator() && resource.data.creatorId == request.auth.uid));
+    }
+
+    match /reports/{reportId} {
+      allow read: if isAdmin();
+      allow create: if isAuthenticated() && isValidReport(request.resource.data) && request.resource.data.reporterId == request.auth.uid;
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /helpRequests/{requestId} {
+      allow read: if isAuthenticated();
+      allow create: if true;
+      allow update: if isAuthenticated() && (resource.data.status == 'Pending' || resource.data.acceptedBy == request.auth.uid);
+      allow delete: if isAdmin();
+    }
+
+    match /bannedRequesters/{bannedId} {
+      allow read: if true;
+      allow list: if true;
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+  }
+}
